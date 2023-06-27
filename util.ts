@@ -9,14 +9,19 @@ export function ensureBeforeUnload<
   R,
 >(
   fn: (...args: A) => R,
-): (...args: A) => Promise<R> {
-  return async (...args: A): Promise<R> => {
-    return await ensurePromise(fn(...args)).finally(() => {
-      globalThis.dispatchEvent(new Event("beforeunload"));
-    });
+): (...args: A) => R {
+  return (...args: A): R => {
+    const teardown = () => globalThis.dispatchEvent(new Event("beforeunload"));
+    try {
+      const ret = fn(...args);
+      if (ret instanceof Promise) {
+        return ret.finally(teardown) as R;
+      }
+      teardown();
+      return ret;
+    } catch (err) {
+      teardown();
+      throw err;
+    }
   };
-}
-
-function ensurePromise<T>(v: T | PromiseLike<T>): Promise<T> {
-  return v instanceof Promise ? v : Promise.resolve(v);
 }
